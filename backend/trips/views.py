@@ -9,6 +9,10 @@ from .services.geocoding_service import (
     GeocodingError,
     NominatimGeocodingService,
 )
+from .services.routing_service import (
+    OSRMRoutingService,
+    RoutingError,
+)
 
 
 @api_view(["GET"])
@@ -28,7 +32,9 @@ def plan_trip(request):
     serializer.is_valid(raise_exception=True)
 
     trip_data = serializer.validated_data
+
     geocoding_service = NominatimGeocodingService()
+    routing_service = OSRMRoutingService()
 
     try:
         current_location = geocoding_service.geocode(
@@ -47,7 +53,24 @@ def plan_trip(request):
             trip_data["dropoff_location"]
         )
 
+        route = routing_service.calculate_route(
+            [
+                current_location,
+                pickup_location,
+                dropoff_location,
+            ]
+        )
+
     except GeocodingError as exc:
+        return Response(
+            {
+                "success": False,
+                "message": str(exc),
+            },
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    except RoutingError as exc:
         return Response(
             {
                 "success": False,
@@ -66,13 +89,14 @@ def plan_trip(request):
     return Response(
         {
             "success": True,
-            "message": "Trip locations geocoded successfully.",
+            "message": "Trip route calculated successfully.",
             "data": {
                 "locations": {
                     "current": current_location,
                     "pickup": pickup_location,
                     "dropoff": dropoff_location,
                 },
+                "route": route,
                 "hos": {
                     "cycle_limit_hours": cycle_limit,
                     "current_cycle_used_hours": current_cycle_used,

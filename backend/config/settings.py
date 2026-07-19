@@ -141,3 +141,5 @@ NOMINATIM_USER_AGENT = (
     "ELDTripPlanner/1.0 "
     "(contact: ahmad5616zaheer@gmail.com)"
 )
+
+OSRM_BASE_URL = "https://router.project-osrm.org"
