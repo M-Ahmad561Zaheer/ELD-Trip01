@@ -9,6 +9,10 @@ from .services.geocoding_service import (
     GeocodingError,
     NominatimGeocodingService,
 )
+from .services.hos_engine import (
+    HOSEngine,
+    HOSEngineError,
+)
 from .services.routing_service import (
     OSRMRoutingService,
     RoutingError,
@@ -61,6 +65,12 @@ def plan_trip(request):
             ]
         )
 
+        hos_engine = HOSEngine(
+            current_cycle_used=trip_data["current_cycle_used"]
+        )
+
+        schedule = hos_engine.generate_schedule(route)
+
     except GeocodingError as exc:
         return Response(
             {
@@ -79,6 +89,15 @@ def plan_trip(request):
             status=status.HTTP_400_BAD_REQUEST,
         )
 
+    except HOSEngineError as exc:
+        return Response(
+            {
+                "success": False,
+                "message": str(exc),
+            },
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
     cycle_limit = 70
     current_cycle_used = trip_data["current_cycle_used"]
     remaining_cycle_hours = round(
@@ -89,7 +108,9 @@ def plan_trip(request):
     return Response(
         {
             "success": True,
-            "message": "Trip route calculated successfully.",
+            "message": (
+                "Trip route and HOS schedule generated successfully."
+            ),
             "data": {
                 "locations": {
                     "current": current_location,
@@ -97,6 +118,7 @@ def plan_trip(request):
                     "dropoff": dropoff_location,
                 },
                 "route": route,
+                "schedule": schedule,
                 "hos": {
                     "cycle_limit_hours": cycle_limit,
                     "current_cycle_used_hours": current_cycle_used,
