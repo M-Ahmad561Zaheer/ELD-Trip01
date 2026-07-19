@@ -13,6 +13,7 @@ from .services.hos_engine import (
     HOSEngine,
     HOSEngineError,
 )
+from .services.log_generator import ELDLogGenerator
 from .services.route_geometry_service import (
     RouteGeometryError,
     RouteGeometryService,
@@ -44,6 +45,7 @@ def plan_trip(request):
     geocoding_service = NominatimGeocodingService()
     routing_service = OSRMRoutingService()
     route_geometry_service = RouteGeometryService()
+    eld_log_generator = ELDLogGenerator()
 
     try:
         current_location = geocoding_service.geocode(
@@ -87,34 +89,16 @@ def plan_trip(request):
             schedule["events"]
         )
 
-    except GeocodingError as exc:
-        return Response(
-            {
-                "success": False,
-                "message": str(exc),
-            },
-            status=status.HTTP_400_BAD_REQUEST,
+        daily_logs = eld_log_generator.generate_logs(
+            schedule["events"]
         )
 
-    except RoutingError as exc:
-        return Response(
-            {
-                "success": False,
-                "message": str(exc),
-            },
-            status=status.HTTP_400_BAD_REQUEST,
-        )
-
-    except HOSEngineError as exc:
-        return Response(
-            {
-                "success": False,
-                "message": str(exc),
-            },
-            status=status.HTTP_400_BAD_REQUEST,
-        )
-
-    except RouteGeometryError as exc:
+    except (
+        GeocodingError,
+        RoutingError,
+        HOSEngineError,
+        RouteGeometryError,
+    ) as exc:
         return Response(
             {
                 "success": False,
@@ -125,16 +109,13 @@ def plan_trip(request):
 
     cycle_limit = 70
     current_cycle_used = trip_data["current_cycle_used"]
-    remaining_cycle_hours = round(
-        cycle_limit - current_cycle_used,
-        2,
-    )
 
     return Response(
         {
             "success": True,
             "message": (
-                "Trip route and HOS schedule generated successfully."
+                "Trip route, HOS schedule and ELD logs "
+                "generated successfully."
             ),
             "data": {
                 "locations": {
@@ -145,10 +126,14 @@ def plan_trip(request):
                 "route": route,
                 "schedule": schedule,
                 "stop_markers": stop_markers,
+                "daily_logs": daily_logs,
                 "hos": {
                     "cycle_limit_hours": cycle_limit,
                     "current_cycle_used_hours": current_cycle_used,
-                    "remaining_cycle_hours": remaining_cycle_hours,
+                    "remaining_cycle_hours": round(
+                        cycle_limit - current_cycle_used,
+                        2,
+                    ),
                     "driving_limit_per_shift_hours": 11,
                     "duty_window_hours": 14,
                     "required_rest_hours": 10,
