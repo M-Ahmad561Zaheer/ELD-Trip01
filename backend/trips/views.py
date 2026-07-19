@@ -13,6 +13,10 @@ from .services.hos_engine import (
     HOSEngine,
     HOSEngineError,
 )
+from .services.route_geometry_service import (
+    RouteGeometryError,
+    RouteGeometryService,
+)
 from .services.routing_service import (
     OSRMRoutingService,
     RoutingError,
@@ -39,6 +43,7 @@ def plan_trip(request):
 
     geocoding_service = NominatimGeocodingService()
     routing_service = OSRMRoutingService()
+    route_geometry_service = RouteGeometryService()
 
     try:
         current_location = geocoding_service.geocode(
@@ -71,6 +76,17 @@ def plan_trip(request):
 
         schedule = hos_engine.generate_schedule(route)
 
+        schedule["events"] = (
+            route_geometry_service.attach_coordinates_to_events(
+                events=schedule["events"],
+                geometry=route["geometry"],
+            )
+        )
+
+        stop_markers = route_geometry_service.build_stop_markers(
+            schedule["events"]
+        )
+
     except GeocodingError as exc:
         return Response(
             {
@@ -90,6 +106,15 @@ def plan_trip(request):
         )
 
     except HOSEngineError as exc:
+        return Response(
+            {
+                "success": False,
+                "message": str(exc),
+            },
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    except RouteGeometryError as exc:
         return Response(
             {
                 "success": False,
@@ -119,6 +144,7 @@ def plan_trip(request):
                 },
                 "route": route,
                 "schedule": schedule,
+                "stop_markers": stop_markers,
                 "hos": {
                     "cycle_limit_hours": cycle_limit,
                     "current_cycle_used_hours": current_cycle_used,
