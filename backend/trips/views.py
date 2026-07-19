@@ -26,6 +26,7 @@ from .services.routing_service import (
 )
 
 
+
 @api_view(["GET"])
 def health_check(request):
     return Response(
@@ -94,6 +95,7 @@ def plan_trip(request):
         daily_logs = eld_log_generator.generate_logs(
             schedule["events"]
         )
+        
 
     except (
         GeocodingError,
@@ -182,6 +184,7 @@ def plan_trip(request):
             request_payload=dict(request.data),
             response_payload=response_data,
         )
+        
 
     except DatabaseError as exc:
         return Response(
