@@ -12,7 +12,10 @@ backend/media/
 
 # Environment
 .env
+.env.example
 backend/.env
+
+
 
 # React
 frontend/.env

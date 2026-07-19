@@ -1,157 +1,275 @@
-import type { DailyLog } from "./types";
+import { useState } from "react";
+import axios from "axios";
 
-interface ELDLogProps {
-  log: DailyLog;
-}
+import ELDLog from "./ELDLog";
+import TripMap from "./TripMap";
+import { planTrip } from "./api";
+import type {
+  TripPlanData,
+  TripRequest,
+} from "./types";
 
-const rows = [
-  {
-    key: "off_duty",
-    label: "Off Duty",
-  },
-  {
-    key: "sleeper_berth",
-    label: "Sleeper Berth",
-  },
-  {
-    key: "driving",
-    label: "Driving",
-  },
-  {
-    key: "on_duty_not_driving",
-    label: "On Duty",
-  },
-];
+import "./App.css";
 
-export default function ELDLog({
-  log,
-}: ELDLogProps) {
-  const width = 960;
-  const labelWidth = 120;
-  const chartWidth = width - labelWidth;
-  const rowHeight = 45;
-  const headerHeight = 35;
-  const height =
-    headerHeight + rows.length * rowHeight + 20;
+const initialForm: TripRequest = {
+  current_location: "",
+  pickup_location: "",
+  dropoff_location: "",
+  current_cycle_used: 0,
+};
 
-  const hourToX = (hour: number) =>
-    labelWidth + (hour / 24) * chartWidth;
+function App() {
+  const [form, setForm] =
+    useState<TripRequest>(initialForm);
+
+  const [tripData, setTripData] =
+    useState<TripPlanData | null>(null);
+
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  const handleChange = (
+    event: React.ChangeEvent<HTMLInputElement>,
+  ) => {
+    const { name, value } = event.target;
+
+    setForm((current) => ({
+      ...current,
+      [name]:
+        name === "current_cycle_used"
+          ? Number(value)
+          : value,
+    }));
+  };
+
+  const handleSubmit = async (
+    event: React.FormEvent<HTMLFormElement>,
+  ) => {
+    event.preventDefault();
+
+    setLoading(true);
+    setError("");
+    setTripData(null);
+
+    try {
+      const response = await planTrip(form);
+      setTripData(response.data);
+    } catch (requestError) {
+      if (axios.isAxiosError(requestError)) {
+        const responseData = requestError.response?.data;
+
+        setError(
+          responseData?.message ??
+            JSON.stringify(responseData) ??
+            "Unable to generate trip plan.",
+        );
+      } else {
+        setError("Unexpected application error.");
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
-    <article className="eld-card">
-      <div className="eld-heading">
+    <main className="app-shell">
+      <header className="hero">
         <div>
-          <h3>Driver's Daily Log</h3>
-          <p>Day {log.day_number}</p>
+          <p className="eyebrow">
+            FMCSA Hours of Service
+          </p>
+          <h1>ELD Trip Planner</h1>
+          <p>
+            Plan compliant driving routes, rest stops,
+            fuel stops and daily driver logs.
+          </p>
         </div>
+      </header>
 
-        <div className="eld-totals">
-          <span>
-            Driving: {log.totals.driving ?? 0}h
-          </span>
-          <span>
-            On Duty:{" "}
-            {log.totals.on_duty_not_driving ?? 0}h
-          </span>
-          <span>
-            Off Duty: {log.totals.off_duty ?? 0}h
-          </span>
-        </div>
-      </div>
+      <section className="panel">
+        <h2>Plan a Trip</h2>
 
-      <div className="eld-scroll">
-        <svg
-          viewBox={`0 0 ${width} ${height}`}
-          className="eld-svg"
+        <form
+          className="trip-form"
+          onSubmit={handleSubmit}
         >
-          {Array.from({ length: 25 }).map(
-            (_, hour) => {
-              const x = hourToX(hour);
+          <label>
+            Current Location
+            <input
+              required
+              name="current_location"
+              value={form.current_location}
+              onChange={handleChange}
+              placeholder="New York, New York"
+            />
+          </label>
 
-              return (
-                <g key={hour}>
-                  <line
-                    x1={x}
-                    x2={x}
-                    y1={headerHeight}
-                    y2={height - 20}
-                    className="grid-line"
-                  />
-                  {hour < 24 && (
-                    <text
-                      x={x + 3}
-                      y={20}
-                      className="hour-label"
-                    >
-                      {hour}
-                    </text>
-                  )}
-                </g>
-              );
-            },
-          )}
+          <label>
+            Pickup Location
+            <input
+              required
+              name="pickup_location"
+              value={form.pickup_location}
+              onChange={handleChange}
+              placeholder="Chicago, Illinois"
+            />
+          </label>
 
-          {rows.map((row, rowIndex) => {
-            const y =
-              headerHeight +
-              rowIndex * rowHeight;
+          <label>
+            Dropoff Location
+            <input
+              required
+              name="dropoff_location"
+              value={form.dropoff_location}
+              onChange={handleChange}
+              placeholder="Los Angeles, California"
+            />
+          </label>
 
-            return (
-              <g key={row.key}>
-                <text
-                  x={5}
-                  y={y + rowHeight / 2 + 5}
-                  className="status-label"
-                >
-                  {row.label}
-                </text>
+          <label>
+            Current Cycle Used
+            <input
+              required
+              type="number"
+              name="current_cycle_used"
+              min={0}
+              max={70}
+              step={0.5}
+              value={form.current_cycle_used}
+              onChange={handleChange}
+            />
+          </label>
 
-                <line
-                  x1={labelWidth}
-                  x2={width}
-                  y1={y + rowHeight / 2}
-                  y2={y + rowHeight / 2}
-                  className="status-line"
-                />
+          <button
+            type="submit"
+            disabled={loading}
+          >
+            {loading
+              ? "Generating trip..."
+              : "Generate Trip Plan"}
+          </button>
+        </form>
 
-                {log.segments
-                  .filter(
-                    (segment) =>
-                      segment.duty_status === row.key,
-                  )
-                  .map((segment, index) => (
-                    <line
-                      key={`${segment.sequence}-${index}`}
-                      x1={hourToX(
-                        segment.start_hour,
-                      )}
-                      x2={hourToX(segment.end_hour)}
-                      y1={y + rowHeight / 2}
-                      y2={y + rowHeight / 2}
-                      className="active-line"
-                    />
-                  ))}
-              </g>
-            );
-          })}
-        </svg>
-      </div>
-
-      <div className="remarks">
-        <h4>Remarks</h4>
-
-        {log.remarks.length === 0 ? (
-          <p>No duty activity recorded.</p>
-        ) : (
-          log.remarks.map((remark, index) => (
-            <p key={`${remark.time}-${index}`}>
-              <strong>{remark.time}</strong> —{" "}
-              {remark.description} at mile{" "}
-              {remark.mile_marker}
-            </p>
-          ))
+        {error && (
+          <div className="error-message">
+            {error}
+          </div>
         )}
-      </div>
-    </article>
+      </section>
+
+      {tripData && (
+        <>
+          <section className="summary-grid">
+            <article className="summary-card">
+              <span>Total Distance</span>
+              <strong>
+                {tripData.route.distance_miles} miles
+              </strong>
+            </article>
+
+            <article className="summary-card">
+              <span>Driving Time</span>
+              <strong>
+                {tripData.route.duration_hours} hours
+              </strong>
+            </article>
+
+            <article className="summary-card">
+              <span>Total Elapsed Time</span>
+              <strong>
+                {
+                  tripData.schedule.summary
+                    .total_trip_elapsed_hours
+                }{" "}
+                hours
+              </strong>
+            </article>
+
+            <article className="summary-card">
+              <span>Fuel Stops</span>
+              <strong>
+                {
+                  tripData.schedule.summary
+                    .fuel_stops
+                }
+              </strong>
+            </article>
+
+            <article className="summary-card">
+              <span>Rest Periods</span>
+              <strong>
+                {
+                  tripData.schedule.summary
+                    .rest_periods
+                }
+              </strong>
+            </article>
+
+            <article className="summary-card">
+              <span>ELD Log Days</span>
+              <strong>
+                {tripData.daily_logs.length}
+              </strong>
+            </article>
+          </section>
+
+          <TripMap data={tripData} />
+
+          <section className="panel">
+            <h2>Trip Schedule</h2>
+
+            <div className="timeline">
+              {tripData.schedule.events.map(
+                (scheduleEvent) => (
+                  <article
+                    className="timeline-item"
+                    key={scheduleEvent.sequence}
+                  >
+                    <div className="timeline-number">
+                      {scheduleEvent.sequence}
+                    </div>
+
+                    <div>
+                      <h3>
+                        {scheduleEvent.event_type
+                          .replaceAll("_", " ")
+                          .replace(/\b\w/g, (letter) =>
+                            letter.toUpperCase(),
+                          )}
+                      </h3>
+
+                      <p>
+                        {scheduleEvent.description}
+                      </p>
+
+                      <small>
+                        Day {scheduleEvent.day_number} ·{" "}
+                        {scheduleEvent.duration_hours}h ·
+                        Mile {scheduleEvent.end_mile}
+                      </small>
+                    </div>
+                  </article>
+                ),
+              )}
+            </div>
+          </section>
+
+          <section className="panel">
+            <h2>Daily ELD Logs</h2>
+
+            <div className="eld-list">
+              {tripData.daily_logs.map((log) => (
+                <ELDLog
+                  key={log.day_number}
+                  log={log}
+                />
+              ))}
+            </div>
+          </section>
+        </>
+      )}
+    </main>
   );
 }
+
+export default App;
