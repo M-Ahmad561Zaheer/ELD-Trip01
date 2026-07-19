@@ -1,8 +1,14 @@
+import time
+
 from rest_framework import status
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 
 from .serializers import TripPlanRequestSerializer
+from .services.geocoding_service import (
+    GeocodingError,
+    NominatimGeocodingService,
+)
 
 
 @api_view(["GET"])
@@ -22,20 +28,50 @@ def plan_trip(request):
     serializer.is_valid(raise_exception=True)
 
     trip_data = serializer.validated_data
-    current_cycle_used = trip_data["current_cycle_used"]
+    geocoding_service = NominatimGeocodingService()
+
+    try:
+        current_location = geocoding_service.geocode(
+            trip_data["current_location"]
+        )
+
+        time.sleep(1)
+
+        pickup_location = geocoding_service.geocode(
+            trip_data["pickup_location"]
+        )
+
+        time.sleep(1)
+
+        dropoff_location = geocoding_service.geocode(
+            trip_data["dropoff_location"]
+        )
+
+    except GeocodingError as exc:
+        return Response(
+            {
+                "success": False,
+                "message": str(exc),
+            },
+            status=status.HTTP_400_BAD_REQUEST,
+        )
 
     cycle_limit = 70
-    remaining_cycle_hours = round(cycle_limit - current_cycle_used, 2)
+    current_cycle_used = trip_data["current_cycle_used"]
+    remaining_cycle_hours = round(
+        cycle_limit - current_cycle_used,
+        2,
+    )
 
     return Response(
         {
             "success": True,
-            "message": "Trip request validated successfully.",
+            "message": "Trip locations geocoded successfully.",
             "data": {
-                "trip": {
-                    "current_location": trip_data["current_location"],
-                    "pickup_location": trip_data["pickup_location"],
-                    "dropoff_location": trip_data["dropoff_location"],
+                "locations": {
+                    "current": current_location,
+                    "pickup": pickup_location,
+                    "dropoff": dropoff_location,
                 },
                 "hos": {
                     "cycle_limit_hours": cycle_limit,

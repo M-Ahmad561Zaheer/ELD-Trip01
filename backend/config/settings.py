@@ -136,3 +136,8 @@ REST_FRAMEWORK = {
         "rest_framework.parsers.MultiPartParser",
     ],
 }
+
+NOMINATIM_USER_AGENT = (
+    "ELDTripPlanner/1.0 "
+    "(contact: ahmad5616zaheer@gmail.com)"
+)
