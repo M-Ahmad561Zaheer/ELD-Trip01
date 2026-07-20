@@ -318,7 +318,7 @@ Install the following before running the project:
 ## Clone the Repository
 
 ```bash
-git clone <your-github-repository-url>
+git clone https://github.com/M-Ahmad561Zaheer/ELD-Trip01.git
 cd Trip
 ```
 
