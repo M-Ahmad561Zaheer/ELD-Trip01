@@ -46,3 +46,4 @@ class TripPlanRequestSerializer(serializers.Serializer):
             )
 
         return attrs
+    
