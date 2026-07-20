@@ -1,5 +1,5 @@
 """
-Django settings for config project.
+Django settings for the config project.
 """
 
 import os
@@ -9,12 +9,30 @@ import dj_database_url
 from dotenv import load_dotenv
 
 
+# -------------------------------------------------------------------------
+# Base directory and environment variables
+# -------------------------------------------------------------------------
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 load_dotenv(BASE_DIR / ".env")
 
 
+def get_env_list(name: str, default: str = "") -> list[str]:
+    """
+    Convert a comma-separated environment variable into a clean list.
+    """
+    return [
+        value.strip()
+        for value in os.getenv(name, default).split(",")
+        if value.strip()
+    ]
+
+
+# -------------------------------------------------------------------------
 # Security and environment
+# -------------------------------------------------------------------------
+
 SECRET_KEY = os.getenv(
     "SECRET_KEY",
     "django-insecure-local-development-key",
@@ -23,20 +41,31 @@ SECRET_KEY = os.getenv(
 DEBUG = os.getenv(
     "DEBUG",
     "True",
-).lower() == "true"
-
-ALLOWED_HOSTS = [
-    host.strip()
-    for host in os.getenv(
-        "ALLOWED_HOSTS",
-        "localhost,127.0.0.1",
-    ).split(",")
-    if host.strip()
-]
+).strip().lower() in {"true", "1", "yes"}
 
 
+ALLOWED_HOSTS = get_env_list(
+    "ALLOWED_HOSTS",
+    "localhost,127.0.0.1",
+)
+
+# Vercel automatically provides VERCEL_URL without https://.
+VERCEL_URL = os.getenv("VERCEL_URL")
+
+if VERCEL_URL and VERCEL_URL not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append(VERCEL_URL)
+
+# Allows Vercel preview and production deployment domains.
+if ".vercel.app" not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append(".vercel.app")
+
+
+# -------------------------------------------------------------------------
 # Applications
+# -------------------------------------------------------------------------
+
 INSTALLED_APPS = [
+    # Django applications
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
@@ -44,20 +73,26 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
 
-    # Third-party apps
+    # Third-party applications
     "rest_framework",
     "corsheaders",
 
-    # Local apps
+    # Local applications
     "trips",
 ]
 
 
+# -------------------------------------------------------------------------
 # Middleware
+# -------------------------------------------------------------------------
+
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
+
+    # CORS middleware should remain before CommonMiddleware.
     "corsheaders.middleware.CorsMiddleware",
+
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -67,49 +102,60 @@ MIDDLEWARE = [
 ]
 
 
-ROOT_URLCONF = "config.urls"
+# -------------------------------------------------------------------------
+# URL and template configuration
+# -------------------------------------------------------------------------
 
+ROOT_URLCONF = "config.urls"
 
 TEMPLATES = [
     {
-        "BACKEND": (
-            "django.template.backends.django.DjangoTemplates"
-        ),
+        "BACKEND": "django.template.backends.django.DjangoTemplates",
         "DIRS": [],
         "APP_DIRS": True,
         "OPTIONS": {
             "context_processors": [
-                (
-                    "django.template.context_processors."
-                    "request"
-                ),
-                (
-                    "django.contrib.auth.context_processors."
-                    "auth"
-                ),
-                (
-                    "django.contrib.messages.context_processors."
-                    "messages"
-                ),
+                "django.template.context_processors.request",
+                "django.contrib.auth.context_processors.auth",
+                "django.contrib.messages.context_processors.messages",
             ],
         },
     },
 ]
 
-
 WSGI_APPLICATION = "config.wsgi.application"
 
 
+# -------------------------------------------------------------------------
 # Database
-DATABASES = {
-    "default": dj_database_url.config(
-        default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}",
-        conn_max_age=600,
-    )
-}
+# -------------------------------------------------------------------------
+
+DATABASE_URL = os.getenv("DATABASE_URL")
+
+if DATABASE_URL:
+    # PostgreSQL/Neon database for production.
+    DATABASES = {
+        "default": dj_database_url.parse(
+            DATABASE_URL,
+            conn_max_age=600,
+            conn_health_checks=True,
+            ssl_require=not DEBUG,
+        )
+    }
+else:
+    # SQLite database for local development.
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": BASE_DIR / "db.sqlite3",
+        }
+    }
 
 
+# -------------------------------------------------------------------------
 # Password validation
+# -------------------------------------------------------------------------
+
 AUTH_PASSWORD_VALIDATORS = [
     {
         "NAME": (
@@ -138,7 +184,10 @@ AUTH_PASSWORD_VALIDATORS = [
 ]
 
 
+# -------------------------------------------------------------------------
 # Internationalization
+# -------------------------------------------------------------------------
+
 LANGUAGE_CODE = "en-us"
 
 TIME_ZONE = "UTC"
@@ -148,16 +197,18 @@ USE_I18N = True
 USE_TZ = True
 
 
+# -------------------------------------------------------------------------
 # Static files
-STATIC_URL = "static/"
+# -------------------------------------------------------------------------
+
+STATIC_URL = "/static/"
 
 STATIC_ROOT = BASE_DIR / "staticfiles"
 
 STORAGES = {
     "default": {
         "BACKEND": (
-            "django.core.files.storage."
-            "FileSystemStorage"
+            "django.core.files.storage.FileSystemStorage"
         ),
     },
     "staticfiles": {
@@ -169,43 +220,57 @@ STORAGES = {
 }
 
 
+# -------------------------------------------------------------------------
 # Default primary key
+# -------------------------------------------------------------------------
+
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 
+# -------------------------------------------------------------------------
 # CORS
-CORS_ALLOWED_ORIGINS = [
-    origin.strip()
-    for origin in os.getenv(
-        "CORS_ALLOWED_ORIGINS",
-        (
-            "http://localhost:5173,"
-            "http://127.0.0.1:5173"
-        ),
-    ).split(",")
-    if origin.strip()
+# -------------------------------------------------------------------------
+
+CORS_ALLOWED_ORIGINS = get_env_list(
+    "CORS_ALLOWED_ORIGINS",
+    (
+        "http://localhost:5173,"
+        "http://127.0.0.1:5173"
+    ),
+)
+
+# Optional support for Vercel preview deployments.
+CORS_ALLOWED_ORIGIN_REGEXES = [
+    r"^https://.*\.vercel\.app$",
 ]
 
 
+# -------------------------------------------------------------------------
 # CSRF trusted origins
-CSRF_TRUSTED_ORIGINS = [
-    origin.strip()
-    for origin in os.getenv(
-        "CSRF_TRUSTED_ORIGINS",
-        (
-            "http://localhost:5173,"
-            "http://127.0.0.1:5173"
-        ),
-    ).split(",")
-    if origin.strip()
-]
+# -------------------------------------------------------------------------
+
+CSRF_TRUSTED_ORIGINS = get_env_list(
+    "CSRF_TRUSTED_ORIGINS",
+    (
+        "http://localhost:5173,"
+        "http://127.0.0.1:5173"
+    ),
+)
+
+if VERCEL_URL:
+    vercel_origin = f"https://{VERCEL_URL}"
+
+    if vercel_origin not in CSRF_TRUSTED_ORIGINS:
+        CSRF_TRUSTED_ORIGINS.append(vercel_origin)
 
 
+# -------------------------------------------------------------------------
 # Django REST Framework
+# -------------------------------------------------------------------------
+
 REST_FRAMEWORK = {
     "DEFAULT_RENDERER_CLASSES": [
         "rest_framework.renderers.JSONRenderer",
-        "rest_framework.renderers.BrowsableAPIRenderer",
     ],
     "DEFAULT_PARSER_CLASSES": [
         "rest_framework.parsers.JSONParser",
@@ -214,8 +279,17 @@ REST_FRAMEWORK = {
     ],
 }
 
+# Keep the browsable API available during local development only.
+if DEBUG:
+    REST_FRAMEWORK["DEFAULT_RENDERER_CLASSES"].append(
+        "rest_framework.renderers.BrowsableAPIRenderer"
+    )
 
+
+# -------------------------------------------------------------------------
 # External services
+# -------------------------------------------------------------------------
+
 NOMINATIM_USER_AGENT = os.getenv(
     "NOMINATIM_USER_AGENT",
     (
@@ -227,16 +301,27 @@ NOMINATIM_USER_AGENT = os.getenv(
 OSRM_BASE_URL = os.getenv(
     "OSRM_BASE_URL",
     "https://router.project-osrm.org",
-)
+).rstrip("/")
 
 
+# -------------------------------------------------------------------------
 # Production security
+# -------------------------------------------------------------------------
+
 if not DEBUG:
+    # Vercel forwards the original protocol through this header.
     SECURE_PROXY_SSL_HEADER = (
         "HTTP_X_FORWARDED_PROTO",
         "https",
     )
 
-    SECURE_SSL_REDIRECT = True
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
+
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+    X_FRAME_OPTIONS = "DENY"
+
+    # HSTS settings.
+    SECURE_HSTS_SECONDS = 31536000
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
