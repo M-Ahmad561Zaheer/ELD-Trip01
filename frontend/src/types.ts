@@ -96,12 +96,22 @@ export interface DailyLogSegment {
   mile_marker: number;
 }
 
+export interface DailyLogTotals {
+  off_duty: number;
+  sleeper_berth: number;
+  driving: number;
+  on_duty_not_driving: number;
+}
+
 export interface DailyLog {
   day_number: number;
   start_elapsed_hour: number;
   end_elapsed_hour: number;
+
   segments: DailyLogSegment[];
-  totals: Record<string, number>;
+
+  totals: DailyLogTotals;
+
   remarks: {
     time: string;
     event_type: string;
