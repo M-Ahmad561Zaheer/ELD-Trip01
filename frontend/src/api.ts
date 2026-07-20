@@ -1,26 +1,29 @@
-import axios from "axios";
-import type {
-  TripPlanResponse,
-  TripRequest,
-} from "./types";
 
-const api = axios.create({
-  baseURL:
-    import.meta.env.VITE_API_BASE_URL ??
-    "http://127.0.0.1:8000/api",
-  timeout: 60000,
-  headers: {
-    "Content-Type": "application/json",
-  },
-});
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL ||
+  "http://127.0.0.1:8000";
 
-export async function planTrip(
-  payload: TripRequest,
-): Promise<TripPlanResponse> {
-  const response = await api.post<TripPlanResponse>(
-    "/trips/plan/",
-    payload,
+export async function planTrip(payload: unknown) {
+  const response = await fetch(
+    `${API_BASE_URL}/api/trips/plan/`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    }
   );
 
-  return response.data;
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(
+      data?.error ||
+      data?.message ||
+      "Failed to generate trip plan."
+    );
+  }
+
+  return data;
 }
